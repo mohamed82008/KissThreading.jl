@@ -7,10 +7,7 @@ function trandjump(rng = Base.GLOBAL_RNG)
     rngjmp = randjump(rng, n+1)
     rngs = Vector{MersenneTwister}(n)
     Threads.@threads for i in 1:n
-        tid = Threads.threadid()
-        if !isassigned(rngs, tid)
-            rngs[tid] = deepcopy(rngjmp[tid+1])
-        end
+        rngs[Threads.threadid()] = deepcopy(rngjmp[tid+1])
     end
     all([isassigned(rngs, i) for i in 1:n]) || error("failed to create rngs")
     rngs
