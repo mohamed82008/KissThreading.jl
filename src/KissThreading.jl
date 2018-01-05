@@ -18,7 +18,7 @@ end
 
 const TRNG = trandjump()
 
-function tmap!(f::Function, src::AbstractVector, dst::AbstractVector)
+function tmap!(f::Function, dst::AbstractVector, src::AbstractVector)
     if length(src) != length(dst)
         throw(ArgumentError("src and dst vectors must have the same length"))
     end

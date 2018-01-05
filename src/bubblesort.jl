@@ -6,8 +6,9 @@ src = [rand(10_000) for i in 1:100]
 dst = similar(src)
 
 println("running with $(Threads.nthreads()) thread(s)")
+
 tic()
-tmap!(src, dst) do x
+tmap!(dst, src) do x
     y = copy(x)
     n = length(x)
     for i in 1:n, j in 2:n
@@ -34,6 +35,7 @@ function simple(src, dst)
     end
 end
 
+dst = similar(src)
 tic()
 simple(src, dst)
 toc()
