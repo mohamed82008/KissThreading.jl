@@ -1,5 +1,5 @@
 #!/bin/bash
 
-sh runtest.sh bubblesort.jl
-sh runtest.sh bootstrap.jl
+bash runtest.sh bubblesort.jl
+bash runtest.sh bootstrap.jl
 
