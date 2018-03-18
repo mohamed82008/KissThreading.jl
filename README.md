@@ -7,7 +7,7 @@ Simple patterns supporting working with threads in Julia. Functionalities:
 * `trandjump` and `TRNG` are for random number generators ready for threading
 * `getrange` is a function returning a range of indices to traverse in a given thread
   it is designed for cases when we handcode loop inside `@threads` macro
-  (usually when mapping `f` is cheap and e.g. can benefit from `@simd`)
+  (usually when mapping `f` is cheap and e.g. can benefit from `@simd`); see `test/summation.jl` for example usage
 
 Comparison of performance `tmap!` threading with copied random number generators and standard `@Threading.threads`.
 Tests run on 16 core AWS c4.4xlarge instance by running *src/runtests.sh*.
