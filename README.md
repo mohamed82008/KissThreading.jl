@@ -1,4 +1,7 @@
 # KissThreading.jl
+
+This package is WIP and not fully tested. Use with care (`tmap!` should be safe to use).
+
 Simple patterns supporting working with threads in Julia. Functionalities:
 * `tmap!`, `tmapreduce`, `tmapadd` functions. They are designed for relatively expensive mapping `f`;
 * `trandjump` and `TRNG` are for random number generators ready for threading
