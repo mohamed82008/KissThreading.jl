@@ -54,7 +54,7 @@ end
 
 # we assume that f(src) is a subset of Abelian group with op
 # and that v0 is its identity
-function tmapreduce!(f::Function, op::Function, v0, src::AbstractVector)
+function tmapreduce(f::Function, op::Function, v0, src::AbstractVector)
     ls = length(src)
     l = Threads.SpinLock()
     i = Threads.Atomic{Int}(1)
@@ -76,7 +76,7 @@ function tmapreduce!(f::Function, op::Function, v0, src::AbstractVector)
     return r
 end
 
-function tmapreduce!(f::Function, op::Function, v0, src::AbstractVector...)
+function tmapreduce(f::Function, op::Function, v0, src::AbstractVector...)
     lss = extrema(length.(src))
     lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same lenth"))
     ls = lss[1]
@@ -100,7 +100,7 @@ function tmapreduce!(f::Function, op::Function, v0, src::AbstractVector...)
     return r
 end
 
-function tmapadd!(f::Function, v0, src::AbstractVector)
+function tmapadd(f::Function, v0, src::AbstractVector)
     ls = length(src)
     i = Threads.Atomic{Int}(1)
     r = Threads.Atomic{typeof(v0)}(zero(v0))
@@ -119,7 +119,7 @@ function tmapadd!(f::Function, v0, src::AbstractVector)
     return v0 + r[]
 end
 
-function tmapadd!(f::Function, v0, src::AbstractVector...)
+function tmapadd(f::Function, v0, src::AbstractVector...)
     ls = length(src)
     i = Threads.Atomic{Int}(1)
     r = Threads.Atomic{typeof(v0)}(zero(v0))
