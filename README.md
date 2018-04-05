@@ -18,4 +18,3 @@ We measure time using `@time` so `tmap!` has more of precompilation overhead rep
 
 ### `bubble.jl`
 ![bubble.png](bubble.png)
-
