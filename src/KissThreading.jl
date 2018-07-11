@@ -56,26 +56,30 @@ end
 
 # we assume that f(src) is a subset of Abelian group with op
 # and that v0 is its identity
-function tmapreduce(f::Function, op::Function, v0, src::AbstractVector)
-    ls = length(src)
-    l = Threads.SpinLock()
-    i = Threads.Atomic{Int}(1)
+function tmapreduce(f::Function, op::Function, v0::T, src::AbstractVector) where T 
     r = deepcopy(v0)
-    Threads.@threads for j in 1:Threads.nthreads()
-        x = deepcopy(v0)
-        while true
+    i = Threads.Atomic{Int}(1)
+    l = Threads.SpinLock()
+    ls = length(src)
+    nt = Threads.nthreads()
+    return let r::T = r;
+        Threads.@threads for j in 1:nt
             k = Threads.atomic_add!(i, 1)
-            if k ≤ ls
-                dst[k] = f(src[k])
-            else
-                break
+            x = f(src[k])
+            while true
+                k = Threads.atomic_add!(i, 1)
+                if k ≤ ls
+                    x = op(x, f(src[k]))
+                else
+                    break
+                end
             end
+            Threads.lock(l)
+            r = op(r, x)
+            Threads.unlock(l)
         end
-        Threads.lock(l)
-        r = op(r, x)
-        Threads.unlock(l)
+        r
     end
-    return r
 end
 
 function tmapreduce(f::Function, op::Function, v0, src::AbstractVector...)
@@ -84,13 +88,15 @@ function tmapreduce(f::Function, op::Function, v0, src::AbstractVector...)
     ls = lss[1]
     l = Threads.SpinLock()
     i = Threads.Atomic{Int}(1)
+
     r = deepcopy(v0)
     Threads.@threads for j in 1:Threads.nthreads()
-        x = deepcopy(v0)
+        k = Threads.atomic_add!(i, 1)
+        x = f(getindex.(src, k)...)
         while true
             k = Threads.atomic_add!(i, 1)
             if k ≤ ls
-                x += f(getindex.(src, k)...)
+                x = op(x, f(getindex.(src,k)...))
             else
                 break
             end
@@ -107,11 +113,11 @@ function tmapadd(f::Function, v0, src::AbstractVector)
     i = Threads.Atomic{Int}(1)
     r = Threads.Atomic{typeof(v0)}(zero(v0))
     Threads.@threads for j in 1:Threads.nthreads()
+        x = zero(v0)
         while true
-            x = zero(v0)
             k = Threads.atomic_add!(i, 1)
             if k ≤ ls
-                x += f(src[k])
+                @inbounds x += f(src[k])
             else
                 break
             end
@@ -122,12 +128,12 @@ function tmapadd(f::Function, v0, src::AbstractVector)
 end
 
 function tmapadd(f::Function, v0, src::AbstractVector...)
-    ls = length(src)
+    ls = length(src[1])
     i = Threads.Atomic{Int}(1)
     r = Threads.Atomic{typeof(v0)}(zero(v0))
     Threads.@threads for j in 1:Threads.nthreads()
+        x = zero(v0)
         while true
-            x = zero(v0)
             k = Threads.atomic_add!(i, 1)
             if k ≤ ls
                 x += f(getindex.(src, k)...)
@@ -150,4 +156,3 @@ function getrange(n)
 end
 
 end
-
