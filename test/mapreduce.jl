@@ -1,10 +1,15 @@
 @testset "mapreduce" begin
     println("--------")
-    println("threaded: $(Threads.nthreads()) threads")
     n = 10000000
     a = rand(n)
+    println("threaded tmapreduce: $(Threads.nthreads()) threads")
+    tmapreduce(log, +, 0., a)
+    @time tmapreduce(log, +, 0., a)
+
+    println("threaded tmapadd: $(Threads.nthreads()) threads")
     tmapadd(log, 0., a)
     @time tmapadd(log, 0., a)
+
     println("unthreaded")
     mapreduce(log, +, a, init=0.)
     @time mapreduce(log, +, a, init=0.)
