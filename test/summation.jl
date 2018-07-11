@@ -21,10 +21,13 @@ function g(x)
 end
 
 z = rand(10^8)
-println("summation\ngetrange")
-f(z)
-@time f(z)
-println("simple")
-g(z)
-@time g(z)
-
+@testset "summation: getrange" begin
+    println("--------")
+    println("threaded")
+    f(z)
+    @time _f = f(z)
+    println("unthreaded")
+    g(z)
+    @time _g = g(z)
+    @test _f ≈ _g
+end
