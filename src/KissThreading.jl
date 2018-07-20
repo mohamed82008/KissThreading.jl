@@ -60,10 +60,10 @@ mutable struct _RefType{T}
     value::T
 end
 
-# we assume that f(src) is a subset of Abelian group with op
+# we assume that f.(src) and init are a subset of Abelian group with op
 function tmapreduce(f::Function, op::Function, src::AbstractVector; init,
                     batch_size=default_batch_size(length(src)))
-    r = _RefType(init)
+    r = _RefType(init) # code will fail if op returns different type than typeof(init)
     i = Threads.Atomic{Int}(1)
     l = Threads.SpinLock()
     ls = length(src)
@@ -120,15 +120,6 @@ function tmapreduce(f::Function, op::Function, src::AbstractVector...; init,
 end
 
 function getrange(n)
-    tid = Threads.threadid()
-    nt = Threads.nthreads()
-    d , r = divrem(n, nt)
-    from = (tid - 1) * d + min(r, tid - 1) + 1
-    to = from + d - 1 + (tid ≤ r ? 1 : 0)
-    from:to
-end
-
-function getrange(n, k, bs)
     tid = Threads.threadid()
     nt = Threads.nthreads()
     d , r = divrem(n, nt)
