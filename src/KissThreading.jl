@@ -3,7 +3,7 @@ module KissThreading
 using Random: MersenneTwister
 using Future: randjump
 
-# export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
+export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
 
 function trandjump(rng = MersenneTwister(0); jump=big(10)^20)
     n = Threads.nthreads()
