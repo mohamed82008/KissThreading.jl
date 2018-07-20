@@ -5,9 +5,11 @@ using Future: randjump
 
 export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
 
+_randjump(rng, n, jump=big(10)^20) = accumulate(randjump, [jump for i in 1:n], init = rng)
+
 function trandjump(rng = MersenneTwister(0); jump=big(10)^20)
     n = Threads.nthreads()
-    rngjmp = accumulate(randjump, [jump for i in 1:n], init = rng)
+    rngjmp = _randjump(rng, n, jump)
     Threads.@threads for i in 1:n
         rngjmp[i] = deepcopy(rngjmp[i])
     end
