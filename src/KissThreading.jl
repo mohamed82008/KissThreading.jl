@@ -1,6 +1,11 @@
 module KissThreading
 
+using Random: MersenneTwister
+using Future: randjump
+
 export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
+
+_randjump(rng, len) = [rng; accumulate(randjump, [big(10)^20 for i in 1:len-1], init = rng)]
 
 # gpt is generators per thread
 # return value each column are generators for a single thread
@@ -8,7 +13,7 @@ function trandjump(rng = MersenneTwister(0), gpt=1)
     n = Threads.nthreads()
     # create gpt+1 RNGs, but leave gpt
     # generator number gpt+1 is dropped to have rngs for each thread separated in memory
-    rngjmp = randjump(rng, n*(gpt+1))
+    rngjmp = _randjump(rng, n*(gpt+1))
     reshape(rngjmp, (gpt+1, n))[1:gpt, :]
 end
 
