@@ -56,10 +56,14 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...)
     end
 end
 
+mutable struct _RefType{T}
+    value::T
+end
+
 # we assume that f(src) is a subset of Abelian group with op
 function tmapreduce(f::Function, op::Function, src::AbstractVector; init,
                     batch_size=default_batch_size(length(src)))
-    r = deepcopy(init)
+    r = _RefType(init)
     i = Threads.Atomic{Int}(1)
     l = Threads.SpinLock()
     ls = length(src)
@@ -78,10 +82,10 @@ function tmapreduce(f::Function, op::Function, src::AbstractVector; init,
             k = Threads.atomic_add!(i, batch_size)
         end
         Threads.lock(l)
-        r = op(r, x)
+        r.value = op(r.value, x)
         Threads.unlock(l)
     end
-    r
+    r.value
 end
 
 function tmapreduce(f::Function, op::Function, src::AbstractVector...; init,
@@ -89,7 +93,7 @@ function tmapreduce(f::Function, op::Function, src::AbstractVector...; init,
     lss = extrema(length.(src))
     lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
 
-    r = deepcopy(init)
+    r = _RefType(init)
     i = Threads.Atomic{Int}(1)
     l = Threads.SpinLock()
     ls = lss[1]
@@ -109,10 +113,10 @@ function tmapreduce(f::Function, op::Function, src::AbstractVector...; init,
             k = Threads.atomic_add!(i, batch_size)
         end
         Threads.lock(l)
-        r = op(r, x)
+        r.value = op(r.value, x)
         Threads.unlock(l)
     end
-    r
+    r.value
 end
 
 function getrange(n)
