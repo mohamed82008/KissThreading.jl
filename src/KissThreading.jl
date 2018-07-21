@@ -20,7 +20,8 @@ const TRNG = trandjump()
 
 default_batch_size(n) = min(n, round(Int, 10*sqrt(n)))
 
-function tmap!(f::Function, dst::AbstractVector, src::AbstractVector)
+function tmap!(f::Function, dst::AbstractVector, src::AbstractVector;
+               batch_size=default_batch_size(length(src)))
     ld = length(dst)
     if ld != length(src)
         throw(ArgumentError("src and dst vectors must have the same length"))
@@ -30,8 +31,12 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector)
     Threads.@threads for j in 1:Threads.nthreads()
         while true
             k = Threads.atomic_add!(i, 1)
-            if k ≤ ld
-                dst[k] = f(src[k])
+            batch_start = 1 + (k-1) * batch_size
+            batch_end = min(k * batch_size, ld)
+            if batch_start ≤ ld
+                for j in batch_start:batch_end
+                    dst[j] = f(src[j])
+                end
             else
                 break
             end
@@ -39,7 +44,8 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector)
     end
 end
 
-function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...)
+function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...;
+               batch_size=default_batch_size(length(src[1])))
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
@@ -49,8 +55,13 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...)
     Threads.@threads for j in 1:Threads.nthreads()
         while true
             k = Threads.atomic_add!(i, 1)
-            if k ≤ ld
-                dst[k] = f(getindex.(src, k)...)
+            batch_start = 1 + (k-1) * batch_size
+            batch_end = min(k * batch_size, ld)
+
+            if batch_start ≤ ld
+                for j in batch_start:batch_end
+                    dst[j] = f(getindex.(src, j)...)
+                end
             else
                 break
             end
