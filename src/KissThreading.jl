@@ -41,12 +41,12 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_s
 end
 
 # we assume that f.(src) and init are a subset of Abelian group with op
-function tmapreduce(f::Function, op::Function, src...; init,
-    batch_size=default_batch_size(length(src[1])))
-
+#function tmapreduce(f::Function, op::Function, src...; init,
+#    batch_size=default_batch_size(length(src[1])))
+function tmapreduce(init, batch_size, f::Function, op::Function, src...)    
     T = get_reduction_type(init, f, op, src...)
-    result = MapReduceResult(T(init), op)
-    result(batch_size, init, f, op, src...)
+    mapreducer = MapReducer{T}(init)
+    return mapreducer(batch_size, f, op, src...)
 end
 @inline function get_reduction_type(init, f, op, src...)
     Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
@@ -54,48 +54,44 @@ end
     Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
     return Tr
 end
-mutable struct MapReduceResult{T, TO}
-    value::T
-    op::TO
+mutable struct MapReducer{T}
+    r::T
 end
-@inline function (result::MapReduceResult)(batch_size, init, f, op, src...)
+function (mapreducer::MapReducer{T})(batch_size, f, op, src...) where T
     lss = extrema(length.(src))
     lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
-    op = result.op
     i = Threads.Atomic{Int}(1)
     l = Threads.SpinLock()
     ls = lss[1]
     Threads.@threads for j in 1:Threads.nthreads()
         k = Threads.atomic_add!(i, batch_size)
         k > ls && continue
-        mapreducer = MapReducer(init, k, f, op, src...)
+        batchmapreducer = BatchMapReducer(T, k, f, op, src...)
         range = (k + 1) : min(k + batch_size - 1, ls)
-        mapreducer = mapreducer(range)
+        batchmapreducer = batchmapreducer(range)
         k = Threads.atomic_add!(i, batch_size)
         while k ≤ ls
             range = (k + 1) : min(k + batch_size - 1, ls)
-            mapreducer = mapreducer(range)
+            batchmapreducer = batchmapreducer(range)
             k = Threads.atomic_add!(i, batch_size)
         end
         Threads.lock(l)
-        result.value = op(result.value, mapreducer.r)
+        mapreducer.r = op(mapreducer.r, batchmapreducer.r)
         Threads.unlock(l)
     end
-    result.value
+    mapreducer.r
 end
-struct MapReducer{TR, TF, TO, TS}
+struct BatchMapReducer{TR, TF, TO, TS}
     r::TR
     f::TF
     op::TO
     src::TS
 end
-@inline function (::Type{<:MapReducer})(init, initidx, f, op, src...)
-    T = get_reduction_type(init, f, op, src...)
+@inline function BatchMapReducer(::Type{T}, initidx, f, op, src...) where T
     r = T(f(getindex.(src, initidx)...))
-    N = length(src)
-    MapReducer(r, f, op, src)    
+    BatchMapReducer(r, f, op, src)    
 end
-@inline function (m::MapReducer)(range)
+@inline function (m::BatchMapReducer)(range)
     r, f, op, src = m.r, m.f, m.op, m.src
     for i in range
         r = op(r, f(getindex.(src, i)...))
