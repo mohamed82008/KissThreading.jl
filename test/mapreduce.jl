@@ -1,6 +1,6 @@
 @testset "mapreduce" begin
     println("--------")
-    n = 10000000
+    n = 100000000
     a = rand(n)
     println("threaded tmapreduce: $(Threads.nthreads()) threads")
     tmapreduce(log, +, a, init=0.0)
