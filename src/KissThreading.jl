@@ -41,11 +41,17 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_s
 end
 
 # we assume that f.(src) and init are a subset of Abelian group with op
-#function tmapreduce(f::Function, op::Function, src...; init,
-#    batch_size=default_batch_size(length(src[1])))
-function tmapreduce(init, batch_size, f::Function, op::Function, src...)    
+function tmapreduce(f::Function, op::Function, src...; init,
+    batch_size=default_batch_size(length(src[1])))
+
+    lss = extrema(length.(src))
+    lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
+
     T = get_reduction_type(init, f, op, src...)
-    mapreducer = MapReducer{T}(init)
+    atomic = Threads.Atomic{Int}(1)
+    lock = Threads.SpinLock()
+    len = lss[1]
+    mapreducer = MapReducer{T}(init, atomic, lock, len)
     return mapreducer(batch_size, f, op, src...)
 end
 @inline function get_reduction_type(init, f, op, src...)
@@ -56,13 +62,14 @@ end
 end
 mutable struct MapReducer{T}
     r::T
+    atomic::Threads.Atomic{Int}
+    lock::Threads.SpinLock
+    len::Int
 end
-function (mapreducer::MapReducer{T})(batch_size, f, op, src...) where T
-    lss = extrema(length.(src))
-    lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
-    i = Threads.Atomic{Int}(1)
-    l = Threads.SpinLock()
-    ls = lss[1]
+@inline function (mapreducer::MapReducer{T})(batch_size, f, op, src...) where T
+    i = mapreducer.atomic
+    l = mapreducer.lock
+    ls = mapreducer.len
     Threads.@threads for j in 1:Threads.nthreads()
         k = Threads.atomic_add!(i, batch_size)
         k > ls && continue
