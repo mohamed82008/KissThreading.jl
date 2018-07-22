@@ -20,32 +20,7 @@ const TRNG = trandjump()
 
 default_batch_size(n) = min(n, round(Int, 10*sqrt(n)))
 
-function tmap!(f::Function, dst::AbstractVector, src::AbstractVector;
-               batch_size=default_batch_size(length(src)))
-    ld = length(dst)
-    if ld != length(src)
-        throw(ArgumentError("src and dst vectors must have the same length"))
-    end
-    
-    i = Threads.Atomic{Int}(1)
-    Threads.@threads for j in 1:Threads.nthreads()
-        while true
-            k = Threads.atomic_add!(i, 1)
-            batch_start = 1 + (k-1) * batch_size
-            batch_end = min(k * batch_size, ld)
-            if batch_start ≤ ld
-                for j in batch_start:batch_end
-                    dst[j] = f(src[j])
-                end
-            else
-                break
-            end
-        end
-    end
-end
-
-function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...;
-               batch_size=default_batch_size(length(src[1])))
+function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
@@ -57,79 +32,75 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...;
             k = Threads.atomic_add!(i, 1)
             batch_start = 1 + (k-1) * batch_size
             batch_end = min(k * batch_size, ld)
-
-            if batch_start ≤ ld
-                for j in batch_start:batch_end
-                    dst[j] = f(getindex.(src, j)...)
-                end
-            else
-                break
+            batch_start > ld && break
+            for j in batch_start:batch_end
+                dst[j] = f(getindex.(src, j)...)
             end
         end
     end
-end
-
-mutable struct _RefType{T}
-    value::T
 end
 
 # we assume that f.(src) and init are a subset of Abelian group with op
-function tmapreduce(f::Function, op::Function, src::AbstractVector; init,
-                    batch_size=default_batch_size(length(src)))
-    r = _RefType(init) # code will fail if op returns different type than typeof(init)
-    i = Threads.Atomic{Int}(1)
-    l = Threads.SpinLock()
-    ls = length(src)
-    Threads.@threads for j in 1:Threads.nthreads()
-        k = Threads.atomic_add!(i, batch_size)
-        k > ls && continue
-        x = f(src[k])
-        for idx in (k+1):min(k+batch_size-1, ls)
-            x = op(x, f(src[idx]))
-        end
-        k = Threads.atomic_add!(i, batch_size)
-        while k ≤ ls
-            for idx in k:min(k+batch_size-1, ls)
-                x = op(x, f(src[idx]))
-            end
-            k = Threads.atomic_add!(i, batch_size)
-        end
-        Threads.lock(l)
-        r.value = op(r.value, x)
-        Threads.unlock(l)
-    end
-    r.value
-end
+function tmapreduce(f::Function, op::Function, src...; init,
+    batch_size=default_batch_size(length(src[1])))
 
-function tmapreduce(f::Function, op::Function, src::AbstractVector...; init,
-                    batch_size=default_batch_size(length(src[1])))
+    T = get_reduction_type(init, f, op, src...)
+    result = MapReduceResult(T(init), op)
+    result(batch_size, init, f, op, src...)
+end
+@inline function get_reduction_type(init, f, op, src...)
+    Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
+    Trinit = Core.Compiler.return_type(op, Tuple{typeof(init), Tx})
+    Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
+    return Tr
+end
+mutable struct MapReduceResult{T, TO}
+    value::T
+    op::TO
+end
+@inline function (result::MapReduceResult)(batch_size, init, f, op, src...)
     lss = extrema(length.(src))
     lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
-
-    r = _RefType(init)
+    op = result.op
     i = Threads.Atomic{Int}(1)
     l = Threads.SpinLock()
     ls = lss[1]
-
-        Threads.@threads for j in 1:Threads.nthreads()
+    Threads.@threads for j in 1:Threads.nthreads()
         k = Threads.atomic_add!(i, batch_size)
         k > ls && continue
-        x = f(getindex.(src, k)...)
-        for idx in (k+1):min(k+batch_size-1, ls)
-            x = op(x, f(getindex.(src, idx)...))
-        end
+        mapreducer = MapReducer(init, k, f, op, src...)
+        range = (k + 1) : min(k + batch_size - 1, ls)
+        mapreducer = mapreducer(range)
         k = Threads.atomic_add!(i, batch_size)
         while k ≤ ls
-            for idx in k:min(k+batch_size-1, ls)
-                x = op(x, f(getindex.(src, idx)...))
-            end
+            range = (k + 1) : min(k + batch_size - 1, ls)
+            mapreducer = mapreducer(range)
             k = Threads.atomic_add!(i, batch_size)
         end
         Threads.lock(l)
-        r.value = op(r.value, x)
+        result.value = op(result.value, mapreducer.r)
         Threads.unlock(l)
     end
-    r.value
+    result.value
+end
+struct MapReducer{TR, TF, TO, TS}
+    r::TR
+    f::TF
+    op::TO
+    src::TS
+end
+@inline function (::Type{<:MapReducer})(init, initidx, f, op, src...)
+    T = get_reduction_type(init, f, op, src...)
+    r = T(f(getindex.(src, initidx)...))
+    N = length(src)
+    MapReducer(r, f, op, src)    
+end
+@inline function (m::MapReducer)(range)
+    r, f, op, src = m.r, m.f, m.op, m.src
+    for i in range
+        r = op(r, f(getindex.(src, i)...))
+    end
+    return typeof(m)(r, f, op, src)
 end
 
 function getrange(n)
