@@ -20,28 +20,44 @@ const TRNG = trandjump()
 
 default_batch_size(n) = min(n, round(Int, 10*sqrt(n)))
 
+struct Mapper
+    atomic::Threads.Atomic{Int}
+    len::Int
+end
+
+@inline function (mapper::Mapper)(batch_size, f, dst, src...)
+    ld = mapper.len
+    atomic = mapper.atomic
+    Threads.@threads for j in 1:Threads.nthreads()
+        while true
+            k = Threads.atomic_add!(atomic, 1)
+            batch_start = 1 + (k-1) * batch_size
+            batch_end = min(k * batch_size, ld)
+            batch_start > ld && break
+            batch_map!(batch_start:batch_end, f, dst, src...)
+        end
+    end
+    dst
+end
+
+@inline function batch_map!(range, f, dst, src...)
+    @inbounds for j in range
+        dst[j] = f(getindex.(src, j)...)
+    end
+end
+
 function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
     end
-    
-    i = Threads.Atomic{Int}(1)
-    Threads.@threads for j in 1:Threads.nthreads()
-        while true
-            k = Threads.atomic_add!(i, 1)
-            batch_start = 1 + (k-1) * batch_size
-            batch_end = min(k * batch_size, ld)
-            batch_start > ld && break
-            for j in batch_start:batch_end
-                dst[j] = f(getindex.(src, j)...)
-            end
-        end
-    end
+    atomic = Threads.Atomic{Int}(1)
+    mapper = Mapper(atomic, ld)
+    mapper(batch_size, f, dst, src...)
 end
 
-mutable struct MapReducer{T}
-    r::T
+struct MapReducer{T}
+    r::Base.RefValue{T}
     atomic::Threads.Atomic{Int}
     lock::Threads.SpinLock
     len::Int
@@ -64,10 +80,10 @@ end
             k = Threads.atomic_add!(atomic, batch_size)
         end
         Threads.lock(lock)
-        mapreducer.r = op(mapreducer.r, r)
+        mapreducer.r[] = op(mapreducer.r[], r)
         Threads.unlock(lock)
     end
-    mapreducer.r
+    mapreducer.r[]
 end
 
 # we assume that f.(src) and init are a subset of Abelian group with op
@@ -89,7 +105,7 @@ end
     atomic = Threads.Atomic{Int}(1)
     lock = Threads.SpinLock()
     len = lss[1]
-    mapreducer = MapReducer{T}(init, atomic, lock, len)
+    mapreducer = MapReducer{T}(Base.RefValue{T}(init), atomic, lock, len)
     return mapreducer(batch_size, f, op, src...)
 end
 
