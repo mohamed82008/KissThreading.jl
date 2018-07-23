@@ -46,7 +46,7 @@ end
     end
 end
 
-function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_size=1)
+function tmap!(f, dst::AbstractVector, src::AbstractVector...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
@@ -75,7 +75,7 @@ end
         r = batch_mapreduce(r, range, f, op, src...)
         k = Threads.atomic_add!(atomic, batch_size)
         while k ≤ len
-            range = (k + 1) : min(k + batch_size - 1, len)
+            range = k : min(k + batch_size - 1, len)
             r = batch_mapreduce(r, range, f, op, src...)
             k = Threads.atomic_add!(atomic, batch_size)
         end
@@ -87,14 +87,12 @@ end
 end
 
 # we assume that f.(src) and init are a subset of Abelian group with op
-function tmapreduce(f, op, src...; 
-        init, batch_size=default_batch_size(length(src[1])))
+function tmapreduce(f, op, src...; init, batch_size=default_batch_size(length(src[1])))
     T = get_reduction_type(init, f, op, src...)
     _tmapreduce(T, init, batch_size, f, op, src...)
 end
 
-function tmapreduce(::Type{T}, f, op, src...; 
-        init, batch_size=default_batch_size(length(src[1]))) where T
+function tmapreduce(::Type{T}, f, op, src...; init, batch_size=default_batch_size(length(src[1]))) where T
     _tmapreduce(T, init, batch_size, f, op, src...)
 end
 
@@ -113,11 +111,7 @@ end
     Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
     Trinit = Core.Compiler.return_type(op, Tuple{typeof(init), Tx})
     Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
-    if Tr == Union{}
-        return typeof(init)
-    else
-        return Tr
-    end
+    Tr === Union{} ? typeof(init) : Tr
 end
 
 @inline function batch_mapreduce(r, range, f, op, src...)
