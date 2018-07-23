@@ -40,70 +40,75 @@ function tmap!(f::Function, dst::AbstractVector, src::AbstractVector...; batch_s
     end
 end
 
-# we assume that f.(src) and init are a subset of Abelian group with op
-function tmapreduce(f::Function, op::Function, src...; init,
-    batch_size=default_batch_size(length(src[1])))
-
-    lss = extrema(length.(src))
-    lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
-
-    T = get_reduction_type(init, f, op, src...)
-    atomic = Threads.Atomic{Int}(1)
-    lock = Threads.SpinLock()
-    len = lss[1]
-    mapreducer = MapReducer{T}(init, atomic, lock, len)
-    return mapreducer(batch_size, f, op, src...)
-end
-@inline function get_reduction_type(init, f, op, src...)
-    Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
-    Trinit = Core.Compiler.return_type(op, Tuple{typeof(init), Tx})
-    Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
-    return Tr
-end
 mutable struct MapReducer{T}
     r::T
     atomic::Threads.Atomic{Int}
     lock::Threads.SpinLock
     len::Int
 end
+
 @inline function (mapreducer::MapReducer{T})(batch_size, f, op, src...) where T
-    i = mapreducer.atomic
-    l = mapreducer.lock
-    ls = mapreducer.len
+    atomic = mapreducer.atomic
+    lock = mapreducer.lock
+    len = mapreducer.len
     Threads.@threads for j in 1:Threads.nthreads()
-        k = Threads.atomic_add!(i, batch_size)
-        k > ls && continue
-        batchmapreducer = BatchMapReducer(T, k, f, op, src...)
-        range = (k + 1) : min(k + batch_size - 1, ls)
-        batchmapreducer = batchmapreducer(range)
-        k = Threads.atomic_add!(i, batch_size)
-        while k ≤ ls
-            range = (k + 1) : min(k + batch_size - 1, ls)
-            batchmapreducer = batchmapreducer(range)
-            k = Threads.atomic_add!(i, batch_size)
+        k = Threads.atomic_add!(atomic, batch_size)
+        k > len && continue
+        r = T(f(getindex.(src, k)...))
+        range = (k + 1) : min(k + batch_size - 1, len)
+        r = batch_mapreduce(r, range, f, op, src...)
+        k = Threads.atomic_add!(atomic, batch_size)
+        while k ≤ len
+            range = (k + 1) : min(k + batch_size - 1, len)
+            r = batch_mapreduce(r, range, f, op, src...)
+            k = Threads.atomic_add!(atomic, batch_size)
         end
-        Threads.lock(l)
-        mapreducer.r = op(mapreducer.r, batchmapreducer.r)
-        Threads.unlock(l)
+        Threads.lock(lock)
+        mapreducer.r = op(mapreducer.r, r)
+        Threads.unlock(lock)
     end
     mapreducer.r
 end
-struct BatchMapReducer{TR, TF, TO, TS}
-    r::TR
-    f::TF
-    op::TO
-    src::TS
+
+# we assume that f.(src) and init are a subset of Abelian group with op
+function tmapreduce(f, op, src...; 
+        init, batch_size=default_batch_size(length(src[1])))
+    T = get_reduction_type(init, f, op, src...)
+    _tmapreduce(T, init, batch_size, f, op, src...)
 end
-@inline function BatchMapReducer(::Type{T}, initidx, f, op, src...) where T
-    r = T(f(getindex.(src, initidx)...))
-    BatchMapReducer(r, f, op, src)    
+
+function tmapreduce(::Type{T}, f, op, src...; 
+        init, batch_size=default_batch_size(length(src[1]))) where T
+    _tmapreduce(T, init, batch_size, f, op, src...)
 end
-@inline function (m::BatchMapReducer)(range)
-    r, f, op, src = m.r, m.f, m.op, m.src
-    for i in range
+
+@inline function _tmapreduce(::Type{T}, init, batch_size, f, op, src...) where T
+    lss = extrema(length.(src))
+    lss[1] == lss[2] || throw(ArgumentError("src vectors must have the same length"))
+
+    atomic = Threads.Atomic{Int}(1)
+    lock = Threads.SpinLock()
+    len = lss[1]
+    mapreducer = MapReducer{T}(init, atomic, lock, len)
+    return mapreducer(batch_size, f, op, src...)
+end
+
+@inline function get_reduction_type(init, f, op, src...)
+    Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
+    Trinit = Core.Compiler.return_type(op, Tuple{typeof(init), Tx})
+    Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
+    if Tr == Union{}
+        return typeof(init)
+    else
+        return Tr
+    end
+end
+
+@inline function batch_mapreduce(r, range, f, op, src...)
+    @inbounds for i in range
         r = op(r, f(getindex.(src, i)...))
     end
-    return typeof(m)(r, f, op, src)
+    r
 end
 
 function getrange(n)
