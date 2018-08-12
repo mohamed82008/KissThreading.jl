@@ -1,7 +1,9 @@
-using Test
 using KissThreading
-using Random: GLOBAL_RNG, srand
-using Statistics: std, mean
+using Compat
+using Compat.Test
+using Compat.Random
+using Compat.Random: GLOBAL_RNG
+using Compat.Statistics: std, mean
 
 include("bootstrap.jl")
 include("bubblesort.jl")
