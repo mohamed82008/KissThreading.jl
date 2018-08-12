@@ -10,7 +10,11 @@ src = [rand(400) for i in 1:100]
             std([mean(rand(rng, x, length(x))) for i in 1:20000])
         end
     end
-    @test all(round.(std.(src)./dst/20; digits=1) .== 1.0)
+    @static if VERSION < v"0.7-"
+        @test all(round.(std.(src)./dst/20, 1) .== 1.0)
+    else
+        @test all(round.(std.(src)./dst/20; digits=1) .== 1.0)
+    end
 
     println("simple")
     function simple(src, dst)
@@ -24,5 +28,9 @@ src = [rand(400) for i in 1:100]
 
     dst = similar(src, Float64)
     @time simple(src, dst)
-    @test all(round.(std.(src)./dst/20; digits=1) .== 1.0)
+    @static if VERSION < v"0.7-"
+        @test all(round.(std.(src)./dst/20, 1) .== 1.0)
+    else
+        @test all(round.(std.(src)./dst/20; digits=1) .== 1.0)
+    end
 end

@@ -1,19 +1,33 @@
 module KissThreading
 
-using Random: MersenneTwister
-using Future: randjump
+using Compat.Random: MersenneTwister
+@static if VERSION >= v"0.7-"
+    using Future: randjump
+end
 
 export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
 
-_randjump(rng, n, jump=big(10)^20) = accumulate(randjump, [jump for i in 1:n], init = rng)
-
-function trandjump(rng = MersenneTwister(0); jump=big(10)^20)
-    n = Threads.nthreads()
-    rngjmp = _randjump(rng, n, jump)
-    Threads.@threads for i in 1:n
-        rngjmp[i] = deepcopy(rngjmp[i])
+@static if VERSION < v"0.7-"
+    const _randjump = randjump
+    
+    function trandjump(rng = MersenneTwister(0), gpt=1)
+        n = Threads.nthreads()
+        # create gpt+1 RNGs, but leave gpt
+        # generator number gpt+1 is dropped to have rngs for each thread separated in memory
+        rngjmp = randjump(rng, n*(gpt+1))
+        reshape(rngjmp, (gpt+1, n))[1:gpt, :]
     end
-    rngjmp
+else
+    _randjump(rng, n, jump=big(10)^20) = accumulate(randjump, [jump for i in 1:n], init = rng)
+    
+    function trandjump(rng = MersenneTwister(0); jump=big(10)^20)
+        n = Threads.nthreads()
+        rngjmp = accumulate(randjump, [jump for i in 1:n], init = rng)
+        Threads.@threads for i in 1:n
+            rngjmp[i] = deepcopy(rngjmp[i])
+        end
+        rngjmp
+    end    
 end
 
 const TRNG = trandjump()
@@ -86,14 +100,26 @@ end
     mapreducer.r[]
 end
 
-# we assume that f.(src) and init are a subset of Abelian group with op
-function tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
-    T = get_reduction_type(init, f, op, src...)
-    _tmapreduce(T, init, batch_size, f, op, src...)
-end
+@static if VERSION < v"0.7-"
+    # we assume that f.(src) and init are a subset of Abelian group with op
+    function tmapreduce(f, op, init, src::AbstractArray...; batch_size=default_batch_size(length(src[1])))
+        T = get_reduction_type(init, f, op, src...)
+        _tmapreduce(T, init, batch_size, f, op, src...)
+    end
 
-function tmapreduce(::Type{T}, f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1]))) where T
-    _tmapreduce(T, init, batch_size, f, op, src...)
+    function tmapreduce(::Type{T}, f, op, init, src::AbstractArray...; batch_size=default_batch_size(length(src[1]))) where T
+        _tmapreduce(T, init, batch_size, f, op, src...)
+    end
+else
+    # we assume that f.(src) and init are a subset of Abelian group with op
+    function tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
+        T = get_reduction_type(init, f, op, src...)
+        _tmapreduce(T, init, batch_size, f, op, src...)
+    end
+
+    function tmapreduce(::Type{T}, f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1]))) where T
+        _tmapreduce(T, init, batch_size, f, op, src...)
+    end
 end
 
 @inline function _tmapreduce(::Type{T}, init, batch_size, f, op, src...) where T
@@ -107,10 +133,16 @@ end
     return mapreducer(batch_size, f, op, src...)
 end
 
+@static if VERSION < v"0.7-"
+    const return_type = Core.Inference.return_type
+else
+    const return_type = Core.Compiler.return_type
+end
+
 @inline function get_reduction_type(init, f, op, src...)
-    Tx = Core.Compiler.return_type(f, Tuple{eltype.(src)...})
-    Trinit = Core.Compiler.return_type(op, Tuple{typeof(init), Tx})
-    Tr = Core.Compiler.return_type(op, Tuple{Trinit, Tx})
+    Tx = return_type(f, Tuple{eltype.(src)...})
+    Trinit = return_type(op, Tuple{typeof(init), Tx})
+    Tr = return_type(op, Tuple{Trinit, Tx})
     Tr === Union{} ? typeof(init) : Tr
 end
 
