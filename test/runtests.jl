@@ -1,6 +1,7 @@
 using KissThreading
 using Compat
 using Compat.Test
+using Compat.Random
 using Compat.Random: GLOBAL_RNG
 using Compat.Statistics: std, mean
 
