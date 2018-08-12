@@ -5,7 +5,7 @@ using Compat.Random: MersenneTwister
     using Future: randjump
 end
 
-export trandjump, TRNG, tmap!, tmapreduce, tmapadd, getrange
+export trandjump, TRNG, tmap!, tmapreduce, getrange
 
 @static if VERSION < v"0.7-"
     const _randjump = randjump

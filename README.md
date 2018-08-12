@@ -3,7 +3,7 @@
 This package is WIP and not fully tested. Use with care (`tmap!` should be safe to use).
 
 Simple patterns supporting working with threads in Julia. Functionalities:
-* `tmap!`, `tmapreduce`, `tmapadd` functions. They are designed for relatively expensive mapping `f`;
+* `tmap!`, `tmapreduce` functions. They are designed for relatively expensive mapping `f`;
 * `trandjump` and `TRNG` are for random number generators ready for threading
 * `getrange` is a function returning a range of indices to traverse in a given thread
   it is designed for cases when we handcode loop inside `@threads` macro
