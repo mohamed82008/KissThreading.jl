@@ -22,9 +22,9 @@ else
     
     function trandjump(rng = MersenneTwister(0); jump=big(10)^20)
         n = Threads.nthreads()
-        rngjmp = accumulate(randjump, [jump for i in 1:n], init = rng)
+        rngjmp = Vector{MersenneTwister}(undef, n)
         Threads.@threads for i in 1:n
-            rngjmp[i] = deepcopy(rngjmp[i])
+            rngjmp[i] = randjump(rng, big(10)^20*i)
         end
         rngjmp
     end    
