@@ -3,6 +3,9 @@ uuid = "ece10b52-bc5d-5f9f-8b6e-cc9c6a4b5293"
 
 [deps]
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
+Future = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+
+[extras]
 
 [targets]
 test = []
