@@ -60,7 +60,7 @@ end
     end
 end
 
-function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
+@noinline function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
@@ -74,7 +74,7 @@ function tmap(f, src::AbstractArray...; batch_size=1)
     g = Base.Generator(f,src...)
     T = Base.@default_eltype(g)
     dst = similar(first(src), T)
-    tmap!(f, dst, src...)
+    tmap!(f, dst, src..., batch_size=batch_size)
 end
 
 struct MapReducer{T}
