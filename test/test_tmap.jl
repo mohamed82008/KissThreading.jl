@@ -12,7 +12,7 @@
                (randn(2,2),)
               ),
               (tuple,
-               tuple([randn(1) for _ in 1:4]...),
+               tuple([randn(1) for _ in 1:3]...),
               ),
              ]
         src1 = first(src)
