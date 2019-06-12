@@ -60,7 +60,7 @@ end
     end
 end
 
-@noinline function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
+function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
         throw(ArgumentError("src and dst vectors must have the same length"))
