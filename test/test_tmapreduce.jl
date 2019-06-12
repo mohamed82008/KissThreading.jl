@@ -2,14 +2,15 @@ module TestTMapreduce
 using Test
 using KissThreading
 
-struct FreeMonoid{T}
-    word::Vector{T}
+struct FreeAbelianGroup{T}
+    coords::Dict{T, Int}
 end
 
-Base.:*(x::FreeMonoid, y::FreeMonoid) = FreeMonoid([x.word; y.word])
-Base.:(==)(x::FreeMonoid, y::FreeMonoid) = x.word == y.word
-pure(x) = FreeMonoid([x])
-Base.one(::Type{FreeMonoid{T}}) where {T} = FreeMonoid{T}(T[])
+function Base.:*(x::FreeAbelianGroup, y::FreeAbelianGroup)
+    FreeAbelianGroup(merge(+, x.coords, y.coords))
+end
+Base.:(==)(x::FreeAbelianGroup, y::FreeAbelianGroup) = x.coords == y.coords
+pure(x) = FreeAbelianGroup(Dict(x=>1))
 
 @testset "tmapreduce" begin
     for setup in [
@@ -24,20 +25,24 @@ Base.one(::Type{FreeMonoid{T}}) where {T} = FreeMonoid{T}(T[])
         res_kiss = @inferred tmapreduce(setup.f, setup.op, setup.src, init=setup.init)
         @test res_base == res_kiss
     end
-    @assert       mapreduce(pure, *, 1:1, init=pure(-1)) == FreeMonoid{Int64}([-1, 1])
-    @test_broken tmapreduce(pure, *, 1:1, init=pure(-1)) == FreeMonoid{Int64}([-1, 1])
-
+    @test tmapreduce(pure, *, 1:1, init=pure(-1)) == pure(-1) * pure(1)
+    @test tmapreduce(pure, *, 1:1, init=pure(-1)) == mapreduce(pure, *, 1:1, init=pure(-1))
 
     # multiple src arrays
     @test 1:6 == @inferred tmapreduce(vcat, vcat, [1,3,5], [2,4,6], init=[])
     for setup in [
             (f=+, op=*, src=(1:10, 2:2:20), init=rand(Int)),
-            (f=*, op=+, src=[rand(-10:10, 100) for _ in 1:5], init=rand(-10:10)),
+            (f=*, op=+, src=[rand(Int, 100) for _ in 1:5], init=rand(-10:10)),
+            (f=pure∘tuple, op=*, src=[rand(-1:2, 100) for _ in 1:5], init=pure((1,2,3,4,5)))
        ]
         res_base = @inferred reduce(setup.op, map(setup.f, setup.src...), init=setup.init)
         res_kiss = @inferred tmapreduce(setup.f, setup.op, setup.src..., init=setup.init)
         @test res_base == res_kiss
     end
+
+    # incompatible input size
+    tmapreduce(+,*,randn(10), randn(10), init=0.)
+    @test_throws ArgumentError tmapreduce(+,*,randn(10), randn(11), init=0.)
 
 
 end

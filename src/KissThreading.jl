@@ -113,7 +113,8 @@ end
     Threads.@threads for j in 1:Threads.nthreads()
         k = Threads.atomic_add!(atomic, batch_size)
         k > len && continue
-        r = T(f(getindex.(src, k)...))
+        y = f(getindex.(src, k)...)
+        r = convert(T, y)
         range = (k + 1) : min(k + batch_size - 1, len)
         r = batch_mapreduce(r, range, f, op, src...)
         k = Threads.atomic_add!(atomic, batch_size)
@@ -133,10 +134,12 @@ end
     tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
 
 $(_doc_threaded_version(mapreduce))
+
+Warning: In contrast to `Base.mapreduce` it is assumed that `op` must be commutative. Otherwise
+the result is undefined.
 """
 function tmapreduce end
 
-# we assume that f.(src) and init are a subset of Abelian group with op
 function tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
     T = get_reduction_type(init, f, op, src...)
     _tmapreduce(T, init, batch_size, f, op, src...)
