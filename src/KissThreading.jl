@@ -10,7 +10,9 @@ export trandjump, TRNG, tmap!, tmapreduce, getrange
 """
     trandjump(rng = MersenneTwister(0); jump=big(10)^20)
 
-Return a vector of copies of `rng`, which are advanced by different multiples of `jump`. Effectively this produces statistically independent copies of `rng` suitable for multi threading. See also [`Random.randjump`](@ref).
+Return a vector of copies of `rng`, which are advanced by different multiples
+of `jump`. Effectively this produces statistically independent copies of `rng`
+suitable for multi threading. See also [`Random.randjump`](@ref).
 """
 function trandjump end
 
@@ -79,7 +81,8 @@ end
 end
 
 function _doc_threaded_version(f)
-    """Threaded version of [`$f`](@ref). The workload is divided into chunks of length `batch_size` and processed by the threads. For very cheap `f` it can be advantageous to increase `batch_size`."""
+    """Threaded version of [`$f`](@ref). The workload is divided into chunks of length `batch_size`
+    and processed by the threads. For very cheap `f` it can be advantageous to increase `batch_size`."""
 end
 
 """
