@@ -130,7 +130,7 @@ end
 """
     tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
 
-$(_doc_threaded_version(map!))
+$(_doc_threaded_version(mapreduce))
 """
 function tmapreduce end
 
