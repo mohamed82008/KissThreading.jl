@@ -2,24 +2,28 @@ module TestTMapreduce
 using Test
 using KissThreading
 
-struct FreeAbelianGroup{T}
+struct FreeAbelianSemigroup{T}
     coords::Dict{T, Int}
 end
 
-function Base.:*(x::FreeAbelianGroup, y::FreeAbelianGroup)
-    FreeAbelianGroup(merge(+, x.coords, y.coords))
+const FASG{T} = FreeAbelianSemigroup{T}
+
+function Base.:*(x::FASG, y::FASG)
+    FASG(merge(+, x.coords, y.coords))
 end
-Base.:(==)(x::FreeAbelianGroup, y::FreeAbelianGroup) = x.coords == y.coords
-pure(x) = FreeAbelianGroup(Dict(x=>1))
+Base.:(==)(x::FASG, y::FASG) = x.coords == y.coords
+pure(x) = FASG(Dict(x=>1))
 
 @testset "tmapreduce" begin
     for setup in [
-        (f=identity, op=+, src=1:10, init=0),
-        (f=identity, op=+, src=1:10, init=21),
-        (f=identity, op=+, src=Int[], init=0),
-        (f=identity, op=+, src=Int[], init=21),
-        (f=x->2x, op=*, src=collect(1:10), init=21),
-        (f=x->2x, op=*, src=rand(Int, 10^5), init=rand(Int)),
+        (f=identity, op=+, src=1:10,            init=0),
+        (f=identity, op=+, src=1:10,            init=21),
+        (f=identity, op=+, src=Int[],           init=0),
+        (f=identity, op=+, src=Int[],           init=21),
+        (f=x->2x,    op=*, src=collect(1:10),   init=21),
+        (f=x->2x,    op=*, src=rand(Int, 10^5), init=rand(Int)),
+        (f=pure,     op=*, src=randn(4),        init=pure(42.)),
+        (f=pure,     op=*, src=randn(10^4),     init=pure(42.)),
        ]
         res_base = @inferred mapreduce(setup.f, setup.op, setup.src, init=setup.init)
         res_kiss = @inferred tmapreduce(setup.f, setup.op, setup.src, init=setup.init)
@@ -43,8 +47,6 @@ pure(x) = FreeAbelianGroup(Dict(x=>1))
     # incompatible input size
     tmapreduce(+,*,randn(10), randn(10), init=0.)
     @test_throws ArgumentError tmapreduce(+,*,randn(10), randn(11), init=0.)
-
-
 end
 
 end#module
