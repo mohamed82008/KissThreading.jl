@@ -7,6 +7,15 @@ end
 
 export trandjump, TRNG, tmap, tmap!, tmapreduce, getrange
 
+"""
+    trandjump(rng = MersenneTwister(0); jump=big(10)^20)
+
+Return a vector of copies of `rng`, which are advanced by different multiples
+of `jump`. Effectively this produces statistically independent copies of `rng`
+suitable for multi threading. See also [`Random.randjump`](@ref).
+"""
+function trandjump end
+
 @static if VERSION < v"0.7-"
     const _randjump = randjump
     
@@ -24,13 +33,24 @@ else
         n = Threads.nthreads()
         rngjmp = Vector{MersenneTwister}(undef, n)
         Threads.@threads for i in 1:n
-            rngjmp[i] = randjump(rng, big(10)^20*i)
+            rngjmp[i] = randjump(rng, jump*i)
         end
         rngjmp
     end    
 end
 
 const TRNG = trandjump()
+
+"""
+    TRNG
+
+A vector of statistically independent random number generators. Useful of threaded code:
+```julia
+rng = TRNG[Threads.threadid()]
+rand(rng)
+```
+"""
+TRNG
 
 default_batch_size(n) = min(n, round(Int, 10*sqrt(n)))
 
@@ -60,6 +80,16 @@ end
     end
 end
 
+function _doc_threaded_version(f)
+    """Threaded version of [`$f`](@ref). The workload is divided into chunks of length `batch_size`
+    and processed by the threads. For very cheap `f` it can be advantageous to increase `batch_size`."""
+end
+
+"""
+    tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
+
+$(_doc_threaded_version(map!))
+"""
 function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
     ld = length(dst)
     if (ld, ld) != extrema(length.(src))
@@ -106,6 +136,13 @@ end
     end
     mapreducer.r[]
 end
+
+"""
+    tmapreduce(f, op, src::AbstractArray...; init, batch_size=default_batch_size(length(src[1])))
+
+$(_doc_threaded_version(mapreduce))
+"""
+function tmapreduce end
 
 @static if VERSION < v"0.7-"
     # we assume that f.(src) and init are a subset of Abelian group with op
@@ -160,6 +197,12 @@ end
     r
 end
 
+"""
+    getrange(n)
+
+Partition the range `1:n` into `Threads.nthreads()` subranges and return the one corresponding to `Threads.threadid()`.
+Useful for splitting a workload among multiple threads. See also the `TiledIteration` package for more advanced variants.
+"""
 function getrange(n)
     tid = Threads.threadid()
     nt = Threads.nthreads()
