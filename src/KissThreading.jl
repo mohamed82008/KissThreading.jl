@@ -5,7 +5,7 @@ using Compat.Random: MersenneTwister
     using Future: randjump
 end
 
-export trandjump, TRNG, tmap!, tmapreduce, getrange
+export trandjump, TRNG, tmap, tmap!, tmapreduce, getrange
 
 @static if VERSION < v"0.7-"
     const _randjump = randjump
@@ -68,6 +68,13 @@ function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
     atomic = Threads.Atomic{Int}(1)
     mapper = Mapper(atomic, ld)
     mapper(batch_size, f, dst, src...)
+end
+
+function tmap(f, src::AbstractArray...; batch_size=1)
+    g = Base.Generator(f,src...)
+    T = Base.@default_eltype(g)
+    dst = similar(first(src), T)
+    tmap!(f, dst, src..., batch_size=batch_size)
 end
 
 struct MapReducer{T}

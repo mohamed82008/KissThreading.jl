@@ -5,6 +5,7 @@ using Compat.Random
 using Compat.Random: GLOBAL_RNG
 using Compat.Statistics: std, mean
 
+include("test_tmap.jl")
 include("bootstrap.jl")
 include("bubblesort.jl")
 include("sort_batch.jl")
