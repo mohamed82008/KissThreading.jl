@@ -1,9 +1,8 @@
 using KissThreading
-using Compat
-using Compat.Test
-using Compat.Random
-using Compat.Random: GLOBAL_RNG
-using Compat.Statistics: std, mean
+using Test
+using Statistics
+using Random
+using Random: GLOBAL_RNG
 
 include("test_tmap.jl")
 include("bootstrap.jl")

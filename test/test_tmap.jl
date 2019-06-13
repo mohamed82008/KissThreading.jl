@@ -1,3 +1,8 @@
+module TestTMap
+
+using Test
+using KissThreading
+
 @testset "test tmap, tmap! correctness" begin
     dst = randn(3)
     src = randn(3)
@@ -31,3 +36,5 @@
     @test_throws ArgumentError tmap!(+, randn(4), randn(5), randn(4))
     @test_throws ArgumentError tmap!(+, randn(5), randn(5), randn(4))
 end
+
+end#module
