@@ -22,8 +22,8 @@ pure(x) = FASG(Dict(x=>1))
         (f=identity, op=+, src=Int[],           init=21),
         (f=x->2x,    op=*, src=collect(1:10),   init=21),
         (f=x->2x,    op=*, src=rand(Int, 10^5), init=rand(Int)),
-        (f=pure,     op=*, src=randn(4),        init=pure(42.)),
-        (f=pure,     op=*, src=randn(10^4),     init=pure(42.)),
+        (f=pure,     op=*, src=randn(4),        init=pure(42.0)),
+        (f=pure,     op=*, src=randn(10^4),     init=pure(42.0)),
        ]
         res_base = @inferred mapreduce(setup.f, setup.op, setup.src, init=setup.init)
         res_kiss = @inferred tmapreduce(setup.f, setup.op, setup.src, init=setup.init)
@@ -45,7 +45,7 @@ pure(x) = FASG(Dict(x=>1))
     end
 
     # incompatible input size
-    tmapreduce(+,*,randn(10), randn(10), init=0.)
+    tmapreduce(+,*,randn(10), randn(10), init=0.0)
     @test_throws ArgumentError tmapreduce(+,*,randn(10), randn(11), init=0.)
 end
 
