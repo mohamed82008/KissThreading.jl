@@ -2,10 +2,12 @@ name = "KissThreading"
 uuid = "ece10b52-bc5d-5f9f-8b6e-cc9c6a4b5293"
 
 [deps]
-Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 Future = "9fa8497b-333b-5362-9e8d-4d0656e87820"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [extras]
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = []
+test = ["Test", "Statistics"]
