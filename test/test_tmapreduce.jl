@@ -46,7 +46,7 @@ pure(x) = FASG(Dict(x=>1))
 
     # incompatible input size
     tmapreduce(+,*,randn(10), randn(10), init=0.0)
-    @test_throws ArgumentError tmapreduce(+,*,randn(10), randn(11), init=0.)
+    @test_throws ArgumentError tmapreduce(+,*,randn(10), randn(11), init=0.0)
 end
 
 end#module
