@@ -19,6 +19,6 @@
     Random.seed!(1234321)
     a = rand(1000)
     r1 = tmapreduce((x)->(2*x), +, a, init=0.0)
-    r2 = mapreduce((x)->(2*x), +, a, init=0.)
+    r2 = mapreduce((x)->(2*x), +, a, init=0.0)
     @test r1 ≈ r2        
 end
