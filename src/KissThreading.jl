@@ -39,34 +39,7 @@ rand(rng)
 """
 TRNG
 
-default_batch_size(n) = min(n, round(Int, 10*sqrt(n)))
-
-struct Mapper
-    atomic::Threads.Atomic{Int}
-    len::Int
-end
-
-@inline function (mapper::Mapper)(batch_size, f, dst, src...)
-    ld = mapper.len
-    atomic = mapper.atomic
-    Threads.@threads for j in 1:Threads.nthreads()
-        while true
-            k = Threads.atomic_add!(atomic, 1)
-            batch_start = 1 + (k-1) * batch_size
-            batch_end = min(k * batch_size, ld)
-            batch_start > ld && break
-            batch_map!(batch_start:batch_end, f, dst, src...)
-        end
-    end
-    dst
-end
-
-@inline function batch_map!(range, f, dst, src...)
-    @inbounds for j in range
-        dst[j] = f(getindex.(src, j)...)
-    end
-end
-
+############################## tmap!
 function _doc_threaded_version(f)
     """Threaded version of [`$f`](@ref). The workload is divided into chunks of length `batch_size`
     and processed by the threads. For very cheap `f` it can be advantageous to increase `batch_size`."""
@@ -77,14 +50,105 @@ end
 
 $(_doc_threaded_version(map!))
 """
-function tmap!(f, dst::AbstractArray, src::AbstractArray...; batch_size=1)
-    ld = length(dst)
-    if (ld, ld) != extrema(length.(src))
-        throw(ArgumentError("src and dst vectors must have the same length"))
+function tmap! end
+
+struct Batches{V}
+    firstindex::Int
+    lastindex::Int
+    batch_size::Int
+    values::V
+    length::Int
+end
+
+function Batches(values, batch_size::Integer)
+    @assert batch_size > 0
+    r = eachindex(values)
+    @assert r isa AbstractUnitRange
+    len = ceil(Int, length(r) / batch_size)
+    Batches(first(r), last(r), batch_size, values, len)
+end
+
+Base.length(o::Batches) = o.length
+Base.eachindex(o::Batches) = Base.OneTo(length(o))
+function Base.getindex(o::Batches, i)
+    start = o.firstindex + (i-1) * o.batch_size
+    stop  = min(start + (o.batch_size) -1, o.lastindex)
+    o.values[start:stop]
+end
+
+function default_batch_size(len)
+    len <= 1 && return 1
+    nthreads=Threads.nthreads()
+    items_per_thread = len/nthreads
+    items_per_batch = items_per_thread/4
+    clamp(1, round(Int, len / items_per_batch), len)
+end
+
+function Base.iterate(o::Batches, state=1)
+    if state in eachindex(o)
+        o[state], state+1
+    else
+        nothing
     end
-    atomic = Threads.Atomic{Int}(1)
-    mapper = Mapper(atomic, ld)
-    mapper(batch_size, f, dst, src...)
+end
+
+mutable struct _RollingCutOut{A,I<:AbstractUnitRange,T} <: AbstractVector{T}
+    array::A
+    eachindex::I
+end
+
+function _RollingCutOut(array::AbstractArray, indices)
+    T = eltype(array)
+    A = typeof(array)
+    I = typeof(indices)
+    _RollingCutOut{A, I, T}(array, indices)
+end
+
+Base.size(r::_RollingCutOut) = (length(r.eachindex),)
+
+function Base.eachindex(r::_RollingCutOut, rs::_RollingCutOut...)
+    for r2 in rs
+        @assert r.eachindex == r2.eachindex
+    end
+    Base.IdentityUnitRange(r.eachindex)
+end
+Base.axes(r::_RollingCutOut) = (eachindex(r),)
+
+@inline function Base.getindex(o::_RollingCutOut, i)
+    @boundscheck checkbounds(o, i)
+    @inbounds o.array[i]
+end
+
+@inline function Base.setindex!(o::_RollingCutOut, val, i)
+    @boundscheck checkbounds(o, i)
+    @inbounds o.array[i] = val
+end
+
+function tmap!(f, dst, srcs...; 
+        batch_size=default_batch_size(length(dst)))
+
+    isempty(first(srcs)) && return dst
+    # we use IndexLinear since _RollingCutOut implementation
+    # does not support other indexing well
+    all_inds  = eachindex(IndexLinear(), srcs...)
+    batches   = Batches(all_inds, batch_size)
+    sample_inds = batches[1]
+    nt = Threads.nthreads()
+    arena_dst_view  = [_RollingCutOut(dst, sample_inds) for _ in 1:nt]
+    arena_src_views = [[_RollingCutOut(src, sample_inds) for src in srcs] for _ in 1:nt]
+
+    for i in eachindex(batches)
+        tid = Threads.threadid()
+        dst_view  = arena_dst_view[tid]
+        src_views = arena_src_views[tid]
+        inds = batches[i]
+        dst_view.eachindex = inds
+        for view in src_views
+            view.eachindex = inds
+        end
+        map!(f, dst_view, src_views...)
+    end
+    dst
 end
 
 """
