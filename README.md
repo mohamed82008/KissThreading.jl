@@ -34,6 +34,3 @@ julia> @btime tmapreduce(sin,*,data)
   3.718 ms (60 allocations: 4.08 KiB)
 0.0
 ```
-
-# Credits
-KissThreading was inspired by and reuses some code of [`KissThreading`](https://github.com/mohamed82008/KissThreading.jl)

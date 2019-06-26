@@ -1,11 +1,15 @@
 name = "KissThreading"
 uuid = "ece10b52-bc5d-5f9f-8b6e-cc9c6a4b5293"
+version = "0.1.0"
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
 Future = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+julia = "1.1"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
