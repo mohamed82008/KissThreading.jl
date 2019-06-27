@@ -4,50 +4,44 @@ using OffsetArrays
 export tmap, tmap!, tmapreduce, treduce
 
 ############################## docs ##############################
-function _make_docstring(signature, fname)
+function _make_docstring(fname, args, kw=String[])
+    tf = tname(Symbol(fname))
+    sargs = join(args, ", ")
+    skw = join([kw; "[batch_size::Integer]"], ", ")
+    signature = string(tf, "(", sargs, "; ", skw, ")")
     """
         $signature
 
     Threaded analog of [`Base.$fname`](@ref). See [`Base.$fname`](@ref) for a description of arguments.
+    In order to parallelize the arguments are split into chunks whose size in controlled by the `batch_size` keyword.
     """
 end
 
 function tname(s::Symbol)
-    Symbol("t"*string(s))
+    Symbol("t", s)
 end
 
 const SYMBOLS_MAPREDUCE_LIKE = [:sum, :prod, :minimum, :maximum]
 for fun in SYMBOLS_MAPREDUCE_LIKE
     tfun = tname(fun)
-    signature = "$tfun([f,] src::AbstractArray)"
-    docstring = _make_docstring(signature, fun)
+    docstring = _make_docstring(fun, ["[f]", "src::AbstractArray"])
     @eval begin
         export $tfun
-        """
-        $($docstring)
-        """
+        @doc $docstring ->
         function $tfun end
     end
 end
 
-"""
-$(_make_docstring("tmap!(f, dst::AbstractArray, srcs::AbstractArray...)", :map!))
-"""
+@doc _make_docstring(:map!, ["f", "dst::AbstractArray", "srcs::AbstractArray..."]) ->
 function tmap! end
 
-"""
-$(_make_docstring("tmap(f, srcs::AbstractArray...)", :map))
-"""
+@doc _make_docstring(:map, ["f", "srcs::AbstractArray..."]) ->
 function tmap end
 
-"""
-$(_make_docstring("tmapreduce(f, op, src::AbstractArray [;init])", :map))
-"""
+@doc _make_docstring(:mapreduce, ["f", "op", "src::AbstractArray"], ["[init]"]) ->
 function tmapreduce end
 
-"""
-$(_make_docstring("treduce(op, src::AbstractArray [;init])", :reduce))
-"""
+@doc _make_docstring(:reduce, ["op", "src::AbstractArray"],  ["[init]"]) ->
 function treduce end
 
 ############################## Helper functions ##############################
