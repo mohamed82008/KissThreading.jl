@@ -11,20 +11,23 @@ macro race(f, args...)
     quote
         println("Benchmark: ", $call_str)
         print("Base: ")
-        @btime $(base_call)
+        @btime $(base_call) evals=10 samples=10
         print("Kiss: ")
-        @btime $(tt_call)
+        @btime $(tt_call) evals=10 samples=10
         println("#"^80)
     end |> esc
 end
 
 @info "Running benchmarks on $(Threads.nthreads()) threads."
-data = randn(10^6)
+data = randn(10^5)
 @race(sum,     sin, data)
 @race(prod,    sin, data)
 @race(minimum, sin, data)
 @race(maximum, sin, data)
+@race(reduce, atan, data)
 @race(mapreduce, sin, +, data)
 @race(map, sin, data)
+dst = similar(data)
+@race(map!, sin, dst, data)
 
 end#module
