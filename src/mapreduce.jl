@@ -75,7 +75,7 @@ function default_batch_size(len)
     nthreads=Threads.nthreads()
     items_per_thread = len/nthreads
     items_per_batch = items_per_thread/4
-    clamp(1, round(Int, items_per_batch), len)
+    max(1, round(Int, items_per_batch))
 end
 
 function Base.iterate(o::Batches, state=1)
@@ -86,34 +86,30 @@ function Base.iterate(o::Batches, state=1)
     end
 end
 
-mutable struct _RollingCutOut{A,I<:AbstractUnitRange,T} <: AbstractVector{T}
+mutable struct _MutableSubVector{T, A <: AbstractArray{T}, I <: AbstractUnitRange} <: AbstractVector{T}
     array::A
     eachindex::I
 end
 
-function _RollingCutOut(array::AbstractArray, indices)
-    T = eltype(array)
-    A = typeof(array)
-    I = typeof(indices)
-    _RollingCutOut{A, I, T}(array, indices)
-end
+Base.size(r::_MutableSubVector) = (length(r.eachindex),)
 
-Base.size(r::_RollingCutOut) = (length(r.eachindex),)
+lispy_allequal() = true
+lispy_allequal(x) = true
+lispy_allequal(x,y,rest...) = (x == y) && lispy_allequal(y, rest...)
+allequal(itr) = lispy_allequal(itr...)
 
-function Base.eachindex(r::_RollingCutOut, rs::_RollingCutOut...)
-    for r2 in rs
-        @assert r.eachindex == r2.eachindex
-    end
+function Base.eachindex(r::_MutableSubVector, rs::_MutableSubVector...)
+    @assert allequal(map(r -> r.eachindex, (r, rs...)))
     Base.IdentityUnitRange(r.eachindex)
 end
-Base.axes(r::_RollingCutOut) = (eachindex(r),)
+Base.axes(r::_MutableSubVector) = (eachindex(r),)
 
-@inline function Base.getindex(o::_RollingCutOut, i)
+@inline function Base.getindex(o::_MutableSubVector, i)
     @boundscheck checkbounds(o, i)
     @inbounds o.array[i]
 end
 
-@inline function Base.setindex!(o::_RollingCutOut, val, i)
+@inline function Base.setindex!(o::_MutableSubVector, val, i)
     @boundscheck checkbounds(o, i)
     @inbounds o.array[i] = val
 end
@@ -127,6 +123,9 @@ struct MapWorkspace{F,B,AD,AS}
 end
 
 @noinline function run!(o::MapWorkspace)
+    # The @threads macro creates a closure. As of Julia 1.2 these are challenging to 
+    # infer and the folloing let trick helps the compiler.
+    # https://docs.julialang.org/en/v1.1.0/manual/performance-tips/#man-performance-captured-1
     let o=o
         Threads.@threads for i in 1:length(o.batches)
             tid = Threads.threadid()
@@ -134,8 +133,10 @@ end
             src_views = o.arena_src_views[tid]
             inds = o.batches[i]
             dst_view.eachindex = inds
-            for view in src_views
-                view.eachindex = inds
+            let inds=inds
+                foreach(src_views) do view
+                    view.eachindex = inds
+                end
             end
             Base.map!(o.f, dst_view, src_views...)
         end
@@ -144,17 +145,17 @@ end
 
 function create_arena_src_views(srcs, sample_inds)
     nt = Threads.nthreads()
-    [Base.map(src -> _RollingCutOut(src, sample_inds), srcs) for _ in 1:nt]
+    [Base.map(src -> _MutableSubVector(src, sample_inds), srcs) for _ in 1:nt]
 end
 
 @noinline function prepare(::typeof(tmap!), f, dst, srcs; batch_size::Int)
-    # we use IndexLinear since _RollingCutOut implementation
+    # we use IndexLinear since _MutableSubVector implementation
     # does not support other indexing well
     all_inds  = eachindex(IndexLinear(), srcs...)
     batches   = Batches(all_inds, batch_size)
     sample_inds = batches[1]
     nt = Threads.nthreads()
-    arena_dst_view  = [_RollingCutOut(dst, sample_inds) for _ in 1:nt]
+    arena_dst_view  = [_MutableSubVector(dst, sample_inds) for _ in 1:nt]
     arena_src_views = create_arena_src_views(srcs, sample_inds)
     return MapWorkspace(f, batches, arena_dst_view, arena_src_views)
 end
