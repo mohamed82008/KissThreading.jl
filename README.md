@@ -1,20 +1,36 @@
-# KissThreading.jl
+# KissThreading
 
-This package is WIP and not fully tested. Use with care (`tmap!` should be safe to use).
+[![Build Status](https://travis-ci.com/mohamed82008/KissThreading.jl.svg?branch=master)](https://travis-ci.com/mohamed82008/KissThreading.jl)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/mohamed82008/KissThreading.jl?svg=true)](https://ci.appveyor.com/project/mohamed82008/KissThreading-jl)
+[![Codecov](https://codecov.io/gh/mohamed82008/KissThreading.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/mohamed82008/KissThreading.jl)
+[![Coveralls](https://coveralls.io/repos/github/mohamed82008/KissThreading.jl/badge.svg?branch=master)](https://coveralls.io/github/mohamed82008/KissThreading.jl?branch=master)
 
-Simple patterns supporting working with threads in Julia. Functionalities:
-* `tmap!`, `tmapreduce` functions. They are designed for relatively expensive mapping `f`;
-* `trandjump` and `TRNG` are for random number generators ready for threading
-* `getrange` is a function returning a range of indices to traverse in a given thread
-  it is designed for cases when we handcode loop inside `@threads` macro
-  (usually when mapping `f` is cheap and e.g. can benefit from `@simd`); see `test/summation.jl` for example usage
+# Usage
 
-Comparison of performance `tmap!` threading with copied random number generators and standard `@Threading.threads`.
-Tests run on 16 core AWS c4.4xlarge instance by running *src/runtests.sh*.
-We measure time using `@time` so `tmap!` has more of precompilation overhead reported.
+KissThreading defines threaded versions of the following functions: `map, map!, mapreduce, reduce, sum, prod, minimum, maximum`
+```julia
+julia> using KissThreading
 
-### `bootstrap.jl`
-![bootstrap.png](bootstrap.png)
+julia> using BenchmarkTools
 
-### `bubble.jl`
-![bubble.png](bubble.png)
+julia> Threads.nthreads()
+4
+
+julia> data = randn(10^6);
+
+julia> @btime sum(sin, data)
+  13.114 ms (1 allocation: 16 bytes)
+279.2390057547361
+
+julia> @btime tsum(sin,data)
+  3.722 ms (60 allocations: 4.09 KiB)
+279.23900575473743
+
+julia> @btime mapreduce(sin,*,data)
+  15.607 ms (1 allocation: 16 bytes)
+0.0
+
+julia> @btime tmapreduce(sin,*,data)
+  3.718 ms (60 allocations: 4.08 KiB)
+0.0
+```
