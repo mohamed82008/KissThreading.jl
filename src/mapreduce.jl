@@ -198,7 +198,7 @@ function create_reduction(::typeof(tmapreduce), op)
 end
 
 function prepare(::typeof(tmapreduce), f, op, srcs; init, batch_size::Int)
-    red = create_reduction(tmapreduce, op)
+    red = Reduction(op)
     w = prepare_mapreduce_like(red, f, srcs, init, batch_size=batch_size)
     return w
 end
@@ -225,13 +225,6 @@ end
 
 for red in SYMBOLS_MAPREDUCE_LIKE
     tred = tname(red)
-    @eval function $tred end
-
-    @eval function prepare(::typeof($tred), f, srcs; batch_size::Int)
-        base_red = Base.$red
-        prepare_mapreduce_like(base_red, f, srcs, batch_size=batch_size)
-    end
-
     @eval function $tred(f, src::AbstractArray;
                         batch_size=default_batch_size(length(src)))
         isempty(src) && return Base.$red(f, src)
@@ -240,6 +233,12 @@ for red in SYMBOLS_MAPREDUCE_LIKE
         run!(w)
     end
     @eval $tred(src; kw...) = $tred(identity, src; kw...)
+
+    @eval function prepare(::typeof($tred), f, srcs; batch_size::Int)
+        base_red = Base.$red
+        prepare_mapreduce_like(base_red, f, srcs, batch_size=batch_size)
+    end
+
 end
 
 function prepare_mapreduce_like(red, f, srcs, init=NoInit(); batch_size::Int)
